@@ -1,0 +1,43 @@
+{
+  "name": "hungerfall",
+  "version": "1.0.0",
+  "description": "A multiplayer, turn-based survival Discord bot with AI narration",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx --watch src/index.ts",
+    "deploy-commands": "tsx scripts/deploy-commands.ts",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "game",
+    "survival",
+    "hunger-games",
+    "multiplayer",
+    "turn-based"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.5.0",
+    "openai": "^4.104.0",
+    "sql.js": "^1.11.0",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/sql.js": "^1.4.9",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
