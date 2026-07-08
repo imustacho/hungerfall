@@ -28,8 +28,9 @@ const gameCommand: BotCommand = {
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     if (!interaction.guildId || !interaction.channelId) {
+      const strings = getLocale();
       await interaction.reply({
-        content: '❌ This command can only be used in a server channel.',
+        content: strings.errServerOnly,
         ephemeral: true,
       });
       return;

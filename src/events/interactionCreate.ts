@@ -3,6 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import { ExtendedClient } from '../client.js';
 import { handleButtonInteraction } from '../interactions/ButtonHandler.js';
 import { handleSelectMenuInteraction } from '../interactions/SelectMenuHandler.js';
+import { getLocale } from '../i18n/index.js';
 
 const log = createLogger('Interaction');
 
@@ -18,8 +19,9 @@ export function registerInteractionEvent(client: ExtendedClient): void {
         const command = client.commands.get(interaction.commandName);
         if (!command) {
           log.warn(`Unknown command: ${interaction.commandName}`);
+          const strings = getLocale();
           await interaction.reply({
-            content: '❌ Unknown command.',
+            content: strings.errUnknownCommand,
             ephemeral: true,
           });
           return;
@@ -52,7 +54,8 @@ export function registerInteractionEvent(client: ExtendedClient): void {
 
       // Try to inform the user
       try {
-        const reply = { content: '❌ An unexpected error occurred.', ephemeral: true };
+        const strings = getLocale();
+        const reply = { content: strings.errorGeneric, ephemeral: true };
         if (interaction.isRepliable()) {
           if (interaction.replied || interaction.deferred) {
             await interaction.followUp(reply);

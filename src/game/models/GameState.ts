@@ -54,6 +54,8 @@ export interface GameState {
 
   /** Discord message ID of the lobby message */
   lobbyMessageId: string | null;
+  /** Discord thread ID for round messages (null if not started or not created yet) */
+  threadId: string | null;
 }
 
 /**
@@ -86,6 +88,7 @@ export function createGameState(
     requiredRoleId,
     creatorId,
     lobbyMessageId: null,
+    threadId: null,
   };
 }
 

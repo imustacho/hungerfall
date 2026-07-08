@@ -50,6 +50,7 @@ export interface LocaleStrings {
   errCannotStart: string;
   errOnlyPlayersStart: string;
   errNoActiveGame: string;
+  errPlayerDead: string;
 
   // ── Lobby feedback ──────────────────────────────────
   teamSearching: string;
@@ -146,6 +147,17 @@ export interface LocaleStrings {
   // ── Misc ────────────────────────────────────────────
   errorGeneric: string;
   errorOccurred: string;
+  errRoleMissing: (roleId: string) => string;
+  errInvalidTarget: string;
+  errServerOnly: string;
+  errUnknownCommand: string;
+  threadName: (matchId: string) => string;
+  dmDeathTitle: string;
+  dmDeathKilledBy: (killer: string) => string;
+  dmDeathPerished: string;
+  dmDeathRound: (round: number) => string;
+  dmDeathAlive: (count: number) => string;
+  dmDeathMatch: string;
   kills: string;
   dmg: string;
   rounds: string;

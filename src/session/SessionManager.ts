@@ -48,10 +48,26 @@ export class SessionManager {
     try {
       await (this.storage as JsonStorage).initialize();
       log.info('JSON storage initialized');
+
+      // Wait for the Discord client to be fully connected before resuming sessions.
+      // Without this, channels.fetch() and users.fetch() fail because the gateway
+      // hasn't connected yet, causing resumed games to lose channel message posting.
+      await this.waitForReady();
       await this.loadActiveSessions();
     } catch (error) {
       log.warn('Storage initialization failed', error);
     }
+  }
+
+  /**
+   * Returns a promise that resolves once the Discord client is ready.
+   * If the client is already ready, resolves immediately.
+   */
+  private waitForReady(): Promise<void> {
+    if (this.client.isReady()) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.client.once('ready', () => resolve());
+    });
   }
 
   private async loadActiveSessions(): Promise<void> {

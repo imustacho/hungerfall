@@ -69,9 +69,10 @@ export class JsonStorage implements StorageProvider {
    * Saves a completed match record.
    */
   async saveMatch(match: MatchRecord): Promise<void> {
-    this.schema.matches.push(match);
+    // Do not save match records and clear any existing matches to keep JSON clean.
+    this.schema.matches = [];
     await this.flush();
-    log.info(`Saved match ${match.matchId} to database`);
+    log.info(`Cleared all completed match records. Match ${match.matchId} not saved.`);
   }
 
   /**

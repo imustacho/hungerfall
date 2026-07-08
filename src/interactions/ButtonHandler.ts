@@ -2,6 +2,9 @@ import { ButtonInteraction, GuildMemberRoleManager } from 'discord.js';
 import { getSessionManager } from '../session/SessionManager.js';
 import { getLocale } from '../i18n/index.js';
 import { createLogger } from '../utils/logger.js';
+import { interactionQueue } from '../utils/InteractionQueue.js';
+import { GameSession } from '../session/GameSession.js';
+import { LobbyError } from '../utils/errors.js';
 
 const log = createLogger('ButtonHandler');
 
@@ -12,15 +15,68 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
   const customId = interaction.customId;
 
   try {
-    // ── Lobby buttons ─────────────────────────────────
+    const sessionManager = getSessionManager();
+    let session: GameSession | undefined;
+
     if (customId.startsWith('lobby_')) {
-      await handleLobbyButton(interaction);
-      return;
+      session = sessionManager.getSession(interaction.channelId);
+      if (!session) {
+        const strings = getLocale();
+        await interaction.reply({
+          content: `❌ ${strings.errNoActiveGame}`,
+          ephemeral: true,
+        });
+        return;
+      }
+    } else if (customId.startsWith('action_')) {
+      session = sessionManager.getSessionByPlayer(interaction.user.id);
+      if (!session) {
+        const strings = getLocale();
+        await interaction.reply({
+          content: `❌ ${strings.errNotInGame}`,
+          ephemeral: true,
+        });
+        return;
+      }
     }
 
-    // ── Action buttons (DM choices) ───────────────────
-    if (customId.startsWith('action_')) {
-      await handleActionButton(interaction);
+    if (session) {
+      // Defer immediately to prevent interaction timeout.
+      // After a bot restart, stale interactions from the previous instance may arrive
+      // with expired tokens (Discord error 10062). We silently skip these.
+      try {
+        await interaction.deferUpdate();
+      } catch (err: any) {
+        if (err?.code === 10062) {
+          log.debug(`Ignoring stale interaction ${customId} (expired before restart)`);
+          return;
+        }
+        throw err;
+      }
+
+      // Enqueue the interaction handler to prevent race conditions
+      await interactionQueue.enqueue(session.getState().channelId, async () => {
+        try {
+          if (customId.startsWith('lobby_')) {
+            await handleLobbyButton(interaction, session!);
+          } else if (customId.startsWith('action_')) {
+            await handleActionButton(interaction, session!);
+          }
+        } catch (error) {
+          // Handle known lobby/game errors gracefully inside the queue
+          if (error instanceof LobbyError) {
+            log.warn(`Lobby action rejected for ${customId}: ${error.code} - ${error.message}`);
+            try {
+              await interaction.followUp({ content: `❌ ${error.message}`, ephemeral: true });
+            } catch {
+              // followUp may fail if interaction expired
+            }
+          } else {
+            // Re-throw unknown errors so the outer catch can handle them
+            throw error;
+          }
+        }
+      });
       return;
     }
 
@@ -43,110 +99,73 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
 /**
  * Handles lobby-related button clicks (join, leave, start, team).
  */
-async function handleLobbyButton(interaction: ButtonInteraction): Promise<void> {
-  const sessionManager = getSessionManager();
-  const channelId = interaction.channelId;
-  const session = sessionManager.getSession(channelId);
-
-  if (!session) {
-    await interaction.reply({
-      content: '❌ No active game in this channel.',
-      ephemeral: true,
-    });
-    return;
-  }
-
+async function handleLobbyButton(interaction: ButtonInteraction, session: GameSession): Promise<void> {
   const strings = getLocale(session.getState().language);
-
   const lobby = session.getLobbyManager();
   const action = interaction.customId.replace('lobby_', '');
 
   switch (action) {
     case 'join': {
-      try {
-        // Role gate check
-        const requiredRoleId = session.getState().requiredRoleId;
-        if (requiredRoleId) {
-          const member = interaction.member;
-          const hasRole = member?.roles instanceof Object
-            && 'cache' in (member.roles as any)
-            ? (member.roles as GuildMemberRoleManager).cache.has(requiredRoleId)
-            : false;
+      // Role gate check
+      const requiredRoleId = session.getState().requiredRoleId;
+      if (requiredRoleId) {
+        const member = interaction.member;
+        const hasRole = member?.roles instanceof Object
+          && 'cache' in (member.roles as any)
+          ? (member.roles as GuildMemberRoleManager).cache.has(requiredRoleId)
+          : false;
 
-          if (!hasRole) {
-            await interaction.reply({
-              content: `❌ You need the <@&${requiredRoleId}> role to join this game.`,
-              ephemeral: true,
-            });
-            return;
-          }
-        }
-
-        lobby.addPlayer(interaction.user.id, interaction.user.displayName);
-        await interaction.deferUpdate();
-        await lobby.updateLobbyMessage();
-        await session.saveActiveState();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : strings.errorGeneric;
-        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
-      }
-      break;
-    }
-
-    case 'leave': {
-      try {
-        lobby.removePlayer(interaction.user.id);
-        await interaction.deferUpdate();
-        await lobby.updateLobbyMessage();
-        await session.saveActiveState();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : strings.errorGeneric;
-        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
-      }
-      break;
-    }
-
-    case 'start': {
-      try {
-        // Only the lobby creator can start the game
-        const creatorId = session.getState().creatorId;
-        if (interaction.user.id !== creatorId) {
-          await interaction.reply({
-            content: `❌ ${strings.errOnlyPlayersStart}`,
+        if (!hasRole) {
+          await interaction.followUp({
+            content: strings.errRoleMissing(requiredRoleId),
             ephemeral: true,
           });
           return;
         }
-
-        await interaction.deferUpdate();
-        await session.startGame();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : strings.errorGeneric;
-        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
       }
+
+      lobby.addPlayer(interaction.user.id, interaction.user.displayName);
+      await lobby.updateLobbyMessage();
+      await session.saveActiveState();
+      break;
+    }
+
+    case 'leave': {
+      lobby.removePlayer(interaction.user.id);
+      await lobby.updateLobbyMessage();
+      await session.saveActiveState();
+      break;
+    }
+
+    case 'start': {
+      // Only the lobby creator can start the game
+      const creatorId = session.getState().creatorId;
+      if (interaction.user.id !== creatorId) {
+        await interaction.followUp({
+          content: `❌ ${strings.errOnlyPlayersStart}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await session.startGame();
       break;
     }
 
     case 'team': {
-      try {
-        const result = lobby.requestTeam(interaction.user.id);
-        await interaction.deferUpdate();
+      const result = lobby.requestTeam(interaction.user.id);
 
-        if (result.formed) {
-          await lobby.updateLobbyMessage();
-        } else {
-          await lobby.updateLobbyMessage();
-          // Notify user they're waiting
-          await interaction.followUp({
-            content: strings.teamSearching,
-            ephemeral: true,
-          });
-        }
-        await session.saveActiveState();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : strings.errorGeneric;
-        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
+      if (result.formed) {
+        await lobby.updateLobbyMessage();
+      } else {
+        await lobby.updateLobbyMessage();
+        // Notify user they're waiting
+        await interaction.followUp({
+          content: strings.teamSearching,
+          ephemeral: true,
+        });
       }
+      await session.saveActiveState();
       break;
     }
 
@@ -158,20 +177,8 @@ async function handleLobbyButton(interaction: ButtonInteraction): Promise<void> 
 /**
  * Handles action button clicks in DMs (player action choices).
  */
-async function handleActionButton(interaction: ButtonInteraction): Promise<void> {
+async function handleActionButton(interaction: ButtonInteraction, session: GameSession): Promise<void> {
   const actionType = interaction.customId.replace('action_', '');
-  const sessionManager = getSessionManager();
-
-  // Find the session this player is in
-  const session = sessionManager.getSessionByPlayer(interaction.user.id);
-
-  if (!session) {
-    await interaction.reply({
-      content: '❌ You are not in an active game.',
-      ephemeral: true,
-    });
-    return;
-  }
 
   // Route direct item-use actions (they don't consume the round action)
   if (actionType.startsWith('use_item_')) {
@@ -182,3 +189,4 @@ async function handleActionButton(interaction: ButtonInteraction): Promise<void>
 
   await session.handleActionChoice(interaction, actionType);
 }
+

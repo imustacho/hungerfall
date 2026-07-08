@@ -1,4 +1,4 @@
-import { Client, Message } from 'discord.js';
+import { Client, Message, ContainerBuilder, MessageFlags, TextDisplayBuilder } from 'discord.js';
 import { Player } from '../game/models/Player.js';
 import { Action } from '../game/models/Action.js';
 import { GameState } from '../game/models/GameState.js';
@@ -85,13 +85,18 @@ export class DMHandler {
           const dmMessage = this.dmMessages.get(playerId);
           if (dmMessage) {
             const strings = getLocale(state.language);
+            const timeoutContainer = new ContainerBuilder()
+              .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(strings.dmTimeout)
+              );
+
             await dmMessage.edit({
-              content: strings.dmTimeout,
-              components: [],
+              components: [timeoutContainer],
+              flags: [MessageFlags.IsComponentsV2] as const,
             });
           }
-        } catch {
-          // Can't edit DM — not critical
+        } catch (err) {
+          log.warn(`Failed to edit timeout DM for player ${playerId}: ${err}`);
         }
       }
     });
@@ -175,7 +180,10 @@ export class DMHandler {
     language: string,
   ): Promise<void> {
     try {
-      const user = await this.client.users.fetch(player.id);
+      // Force-fetch the user from the API to ensure the cache is populated.
+      // After a bot restart/resume, user objects may not be in cache,
+      // causing createDM() to fail with "Cannot read properties of null".
+      const user = await this.client.users.fetch(player.id, { force: true });
       const dmChannel = await user.createDM();
 
       const rendered = renderActionChoice(player, roundNumber, allPlayers, language);

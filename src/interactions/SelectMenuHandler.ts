@@ -2,6 +2,8 @@ import { AnySelectMenuInteraction } from 'discord.js';
 import { getSessionManager } from '../session/SessionManager.js';
 import { getLocale } from '../i18n/index.js';
 import { createLogger } from '../utils/logger.js';
+import { interactionQueue } from '../utils/InteractionQueue.js';
+import { GameSession } from '../session/GameSession.js';
 
 const log = createLogger('SelectMenuHandler');
 
@@ -16,7 +18,34 @@ export async function handleSelectMenuInteraction(
   try {
     // ── Target selection for actions ──────────────────
     if (customId.startsWith('target_')) {
-      await handleTargetSelection(interaction);
+      const sessionManager = getSessionManager();
+      const session = sessionManager.getSessionByPlayer(interaction.user.id);
+
+      if (!session) {
+        const strings = getLocale();
+        await interaction.reply({
+          content: `❌ ${strings.errNotInGame}`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Defer immediately to prevent interaction timeout.
+      // After a bot restart, stale interactions may arrive with expired tokens.
+      try {
+        await interaction.deferUpdate();
+      } catch (err: any) {
+        if (err?.code === 10062) {
+          log.debug(`Ignoring stale interaction ${customId} (expired before restart)`);
+          return;
+        }
+        throw err;
+      }
+
+      // Enqueue target selection processing
+      await interactionQueue.enqueue(session.getState().channelId, async () => {
+        await handleTargetSelection(interaction, session!);
+      });
       return;
     }
 
@@ -39,20 +68,11 @@ export async function handleSelectMenuInteraction(
 /**
  * Handles target selection from a select menu in DMs.
  */
-async function handleTargetSelection(interaction: AnySelectMenuInteraction): Promise<void> {
+async function handleTargetSelection(
+  interaction: AnySelectMenuInteraction,
+  session: GameSession,
+): Promise<void> {
   const actionType = interaction.customId.replace('target_', '');
-  const sessionManager = getSessionManager();
-
-  const session = sessionManager.getSessionByPlayer(interaction.user.id);
-
-  if (!session) {
-    await interaction.reply({
-      content: '❌ You are not in an active game.',
-      ephemeral: true,
-    });
-    return;
-  }
-
   const strings = getLocale(session.getState().language);
 
   // Get the selected target ID
@@ -63,8 +83,8 @@ async function handleTargetSelection(interaction: AnySelectMenuInteraction): Pro
       : undefined;
 
   if (!targetId) {
-    await interaction.reply({
-      content: `❌ Invalid target selection.`,
+    await interaction.followUp({
+      content: strings.errInvalidTarget,
       ephemeral: true,
     });
     return;
@@ -72,3 +92,4 @@ async function handleTargetSelection(interaction: AnySelectMenuInteraction): Pro
 
   await session.handleTargetChoice(interaction, actionType, targetId);
 }
+

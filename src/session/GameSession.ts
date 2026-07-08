@@ -6,6 +6,7 @@ import {
   ContainerBuilder,
   TextChannel,
   TextDisplayBuilder,
+  ThreadChannel,
 } from 'discord.js';
 import { GameEngine } from '../game/engine/GameEngine.js';
 import { GameState, createGameState, getAlivePlayers, getDeadPlayers } from '../game/models/GameState.js';
@@ -13,6 +14,7 @@ import { Action, ACTION_DEFINITIONS, TargetedActionType } from '../game/models/A
 import { LobbyManager } from '../lobby/LobbyManager.js';
 import { renderLobby, renderLobbyStarted } from '../lobby/LobbyRenderer.js';
 import { renderRoundSummary, renderGameOver } from '../rendering/RoundSummaryRenderer.js';
+import { DeathEvent } from '../game/models/RoundResult.js';
 import { renderTargetSelection, renderActionConfirmation, renderActionChoice } from '../rendering/DMActionRenderer.js';
 import { DMHandler } from '../interactions/DMHandler.js';
 import { Narrator } from '../narrator/Narrator.js';
@@ -39,9 +41,14 @@ export class GameSession {
   private dmHandler: DMHandler;
   private rng: SeededRNG;
   private channel: TextChannel | null = null;
+  private thread: ThreadChannel | null = null;
 
   /** Whether the game loop is currently running */
   private running: boolean = false;
+
+  private get postTarget(): TextChannel | ThreadChannel | null {
+    return this.thread || this.channel;
+  }
 
   constructor(
     private client: Client,
@@ -110,22 +117,35 @@ export class GameSession {
   async startGame(): Promise<void> {
     this.lobby.startGame();
 
-    // Update lobby message to show "in progress"
+    // Update lobby message to show "in progress" and create the thread
     const lobbyMessage = this.lobby.getLobbyMessage();
     if (lobbyMessage) {
       const rendered = renderLobbyStarted(this.state);
       await lobbyMessage.edit({
         components: rendered.components,
       });
+
+      try {
+        const strings = getLocale(this.state.language);
+        this.thread = await lobbyMessage.startThread({
+          name: strings.threadName(this.state.matchId),
+          autoArchiveDuration: 60,
+        });
+        this.state.threadId = this.thread.id;
+        log.info(`Created thread ${this.thread.id} for match ${this.state.matchId}`);
+      } catch (err) {
+        log.error(`Failed to create thread for match ${this.state.matchId}`, err);
+      }
     }
 
-    // Save to database (transitioned to active phase)
+    // Save to database (transitioned to active phase, including threadId)
     await this.saveActiveState();
 
     // Send a start announcement
-    if (this.channel) {
+    const target = this.postTarget;
+    if (target) {
       const strings = getLocale(this.state.language);
-      await this.channel.send({
+      await target.send({
         embeds: [{
           title: strings.gameStartTitle,
           description: strings.gameStartDesc(this.state.players.size),
@@ -151,6 +171,24 @@ export class GameSession {
   private async runGameLoop(): Promise<void> {
     while (this.running && this.state.phase === 'active') {
       try {
+        if (!this.channel) {
+          try {
+            this.channel = await this.client.channels.fetch(this.state.channelId) as TextChannel;
+            log.info(`Channel re-fetched for session ${this.state.matchId}`);
+          } catch {
+            log.warn(`Cannot fetch channel ${this.state.channelId} — messages will be skipped this round`);
+          }
+        }
+
+        if (this.channel && !this.thread && this.state.threadId) {
+          try {
+            this.thread = await this.client.channels.fetch(this.state.threadId) as ThreadChannel;
+            log.info(`Thread re-fetched for session ${this.state.matchId}`);
+          } catch {
+            log.warn(`Cannot fetch thread ${this.state.threadId} — messages will fall back to channel`);
+          }
+        }
+
         await this.executeRound();
 
         // Check for game end (cast avoids type narrowing from while condition)
@@ -165,11 +203,16 @@ export class GameSession {
         log.error(`Error in round ${this.state.round + 1}`, error);
 
         // Post error message and continue to next round
-        if (this.channel) {
-          const strings = getLocale(this.state.language);
-          await this.channel.send({
-            content: strings.errorOccurred,
-          });
+        const target = this.postTarget;
+        if (target) {
+          try {
+            const strings = getLocale(this.state.language);
+            await target.send({
+              content: strings.errorOccurred,
+            });
+          } catch {
+            // send may fail — not critical
+          }
         }
         await delay(2000);
       }
@@ -187,14 +230,15 @@ export class GameSession {
     log.info(`Round ${this.state.round + 1}: Selected ${selectedIds.length}/${alivePlayers.length} players`);
 
     // ── 2. Notify channel that a round is starting ────
-    if (this.channel) {
+    const target = this.postTarget;
+    if (target) {
       const strings = getLocale(this.state.language);
       const selectedNames = selectedIds.map(id => {
         const p = this.state.players.get(id);
         return p ? `<@${p.id}>` : 'Unknown';
       });
 
-      await this.channel.send({
+      await target.send({
         content: `${strings.roundNotice(this.state.round + 1)}${selectedNames.join(', ')}${strings.roundCheckDMs}`,
       });
     }
@@ -233,12 +277,59 @@ export class GameSession {
     this.state.narrationHistory.push(narration);
 
     // ── 6. Post round summary ─────────────────────────
-    if (this.channel) {
+    if (target) {
       const summaryEmbed = renderRoundSummary(this.state, result, narration);
-      await this.channel.send({ embeds: [summaryEmbed] });
+      await target.send({ embeds: [summaryEmbed] });
     }
 
-    // ── 7. Update lobby message ───────────────────────
+    // ── 7. Send Death DMs to newly dead players ───────
+    if (result.deaths.length > 0) {
+      const aliveCount = result.aliveCount;
+      const roundNumber = result.roundNumber;
+
+      for (const deadPlayerId of result.deaths) {
+        const deadPlayer = this.state.players.get(deadPlayerId);
+        if (!deadPlayer) continue;
+
+        try {
+          const strings = getLocale(this.state.language);
+          const user = await this.client.users.fetch(deadPlayerId, { force: true });
+          const dmChannel = await user.createDM();
+
+          let causeText = strings.dmDeathPerished;
+          const deathEvent = result.events.find(
+            (e) => e.type === 'death' && e.playerId === deadPlayerId
+          ) as DeathEvent | undefined;
+
+          if (deathEvent && deathEvent.killerId) {
+            const killer = this.state.players.get(deathEvent.killerId);
+            if (killer) {
+              causeText = strings.dmDeathKilledBy(killer.username);
+            }
+          }
+
+          await dmChannel.send({
+            embeds: [
+              {
+                title: strings.dmDeathTitle,
+                description: causeText,
+                color: 0x747f8d,
+                fields: [
+                  { name: strings.dmDeathRound(roundNumber), value: '\u200b', inline: true },
+                  { name: strings.dmDeathAlive(aliveCount), value: '\u200b', inline: true },
+                ],
+                footer: { text: `${strings.dmDeathMatch}: ${this.state.matchId}` },
+              },
+            ],
+          });
+          log.info(`Sent death DM to ${deadPlayer.username}`);
+        } catch (err) {
+          log.error(`Failed to send death DM to player ${deadPlayer.username}`, err);
+        }
+      }
+    }
+
+    // ── 8. Update lobby message ───────────────────────
     const lobbyMessage = this.lobby.getLobbyMessage();
     if (lobbyMessage) {
       const rendered = renderLobbyStarted(this.state);
@@ -263,9 +354,10 @@ export class GameSession {
   private async handleGameOver(): Promise<void> {
     this.running = false;
 
-    if (this.channel) {
+    const target = this.postTarget;
+    if (target) {
       const gameOverEmbed = renderGameOver(this.state);
-      await this.channel.send({ embeds: [gameOverEmbed] });
+      await target.send({ embeds: [gameOverEmbed] });
     }
 
     // Save match to storage
@@ -338,6 +430,15 @@ export class GameSession {
         }
       }
 
+      if (this.state.threadId) {
+        try {
+          this.thread = await this.client.channels.fetch(this.state.threadId) as ThreadChannel;
+          log.info(`Fetched thread ${this.state.threadId} on resume`);
+        } catch {
+          log.warn(`Failed to fetch thread ${this.state.threadId} on resume`);
+        }
+      }
+
       log.info(`Resumed session ${this.state.matchId} (phase: ${this.state.phase}, round: ${this.state.round})`);
 
       if (this.state.phase === 'active') {
@@ -368,10 +469,19 @@ export class GameSession {
    */
   async handleActionChoice(interaction: ButtonInteraction, actionType: string): Promise<void> {
     const playerId = interaction.user.id;
+    const player = this.state.players.get(playerId);
+    const strings = getLocale(this.state.language);
+
+    if (!player || !player.alive) {
+      await interaction.followUp({
+        content: `❌ ${strings.errPlayerDead}`,
+        ephemeral: true,
+      });
+      return;
+    }
 
     if (!this.dmHandler.hasPendingAction(playerId)) {
-      const strings = getLocale(this.state.language);
-      await interaction.reply({
+      await interaction.followUp({
         content: `❌ ${strings.dmNone}`,
         ephemeral: true,
       });
@@ -382,7 +492,6 @@ export class GameSession {
 
     if (needsTarget) {
       // Show target selection
-      const player = this.state.players.get(playerId)!;
       const alive = getAlivePlayers(this.state);
       const def = ACTION_DEFINITIONS[actionType as keyof typeof ACTION_DEFINITIONS];
 
@@ -396,19 +505,19 @@ export class GameSession {
       if (targets.length === 0) {
         // No valid targets — resolve as defend
         this.dmHandler.handleActionChoice(playerId, 'defend');
-        await interaction.update(renderActionConfirmation('defend', undefined, this.state.language));
+        await interaction.editReply(renderActionConfirmation('defend', undefined, this.state.language));
         return;
       }
 
       const rendered = renderTargetSelection(actionType as TargetedActionType, player, targets, this.state.language);
-      await interaction.update({
+      await interaction.editReply({
         components: rendered.components,
         flags: rendered.flags,
       });
     } else {
       // Immediate action — show confirmation
       const rendered = renderActionConfirmation(actionType as any, undefined, this.state.language);
-      await interaction.update({
+      await interaction.editReply({
         components: rendered.components,
         flags: rendered.flags,
       });
@@ -424,10 +533,19 @@ export class GameSession {
     targetId: string,
   ): Promise<void> {
     const playerId = interaction.user.id;
+    const player = this.state.players.get(playerId);
+    const strings = getLocale(this.state.language);
+
+    if (!player || !player.alive) {
+      await interaction.followUp({
+        content: `❌ ${strings.errPlayerDead}`,
+        ephemeral: true,
+      });
+      return;
+    }
 
     if (!this.dmHandler.hasPendingAction(playerId)) {
-      const strings = getLocale(this.state.language);
-      await interaction.reply({
+      await interaction.followUp({
         content: `❌ ${strings.dmNone}`,
         ephemeral: true,
       });
@@ -438,7 +556,7 @@ export class GameSession {
 
     const target = this.state.players.get(targetId);
     const rendered = renderActionConfirmation(actionType as any, target?.username, this.state.language);
-    await interaction.update({
+    await interaction.editReply({
       components: rendered.components,
       flags: rendered.flags,
     });
@@ -453,8 +571,8 @@ export class GameSession {
     const player = this.state.players.get(playerId);
     const strings = getLocale(this.state.language);
 
-    if (!player) {
-      await interaction.reply({ content: `❌ ${strings.dmNone}`, ephemeral: true });
+    if (!player || !player.alive) {
+      await interaction.followUp({ content: `❌ ${strings.errPlayerDead}`, ephemeral: true });
       return;
     }
 
@@ -462,9 +580,12 @@ export class GameSession {
     const result = this.engine.useItemOnPlayer(player, itemId);
 
     if (!result) {
-      await interaction.reply({ content: strings.dmItemNotUsable, ephemeral: true });
+      await interaction.followUp({ content: strings.dmItemNotUsable, ephemeral: true });
       return;
     }
+
+    // Save the new state immediately to the database (prevents desync on crash/restart)
+    await this.saveActiveState();
 
     // Show confirmation and re-render action choice screen with new player state
     const allPlayers = Array.from(this.state.players.values());
@@ -476,7 +597,7 @@ export class GameSession {
     const infoContainer = new ContainerBuilder()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(confirmText));
 
-    await interaction.update({
+    await interaction.editReply({
       components: [infoContainer, ...actionRendered.components],
       flags: actionRendered.flags,
     });
