@@ -36,6 +36,10 @@ export interface Player {
   /** Whether this player was selected to act in the current round */
   selectedThisRound: boolean;
 
+  // ── Language ──────────────────────────────────────────
+  /** Player's preferred language for DM messages */
+  language: string;
+
   // ── Extensible metadata ─────────────────────────────
   /** Freeform metadata for future extensions */
   metadata: Record<string, unknown>;
@@ -44,7 +48,7 @@ export interface Player {
 /**
  * Creates a new player with default values.
  */
-export function createPlayer(id: string, username: string, maxHp: number): Player {
+export function createPlayer(id: string, username: string, maxHp: number, language: string = 'en'): Player {
   return {
     id,
     username,
@@ -61,6 +65,7 @@ export function createPlayer(id: string, username: string, maxHp: number): Playe
     actionsPerformed: 0,
     roundsSinceLastAction: 0,
     selectedThisRound: false,
+    language,
     metadata: {},
   };
 }
@@ -73,6 +78,7 @@ export function clonePlayer(player: Player): Player {
     ...player,
     inventory: player.inventory.map(item => ({ ...item })),
     statusEffects: player.statusEffects.map(effect => ({ ...effect })),
+    language: player.language,
     metadata: { ...player.metadata },
   };
 }

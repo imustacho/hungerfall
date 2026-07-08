@@ -57,7 +57,7 @@ export class DMHandler {
       if (!player || !player.alive) return;
 
       try {
-        await this.sendActionDM(player, state.round + 1, allPlayers, state.language);
+        await this.sendActionDM(player, state.round + 1, allPlayers, player.language);
       } catch (error) {
         log.error(`Failed to DM player ${player.username}`, error);
         // Player can't receive DMs — cancel the pending slot and use default
@@ -84,7 +84,8 @@ export class DMHandler {
         try {
           const dmMessage = this.dmMessages.get(playerId);
           if (dmMessage) {
-            const strings = getLocale(state.language);
+            const player = state.players.get(playerId);
+            const strings = getLocale(player?.language || state.language);
             const timeoutContainer = new ContainerBuilder()
               .addTextDisplayComponents(
                 new TextDisplayBuilder().setContent(strings.dmTimeout)

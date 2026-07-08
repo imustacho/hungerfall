@@ -36,6 +36,17 @@ export interface StorageProvider {
   listActiveSessions(): Promise<import('../game/models/GameState.js').GameState[]>;
 
   /**
+   * Retrieves a user's preferred language for DMs.
+   * Returns null if no preference is set.
+   */
+  getUserLanguage(userId: string): Promise<string | null>;
+
+  /**
+   * Saves a user's preferred DM language.
+   */
+  setUserLanguage(userId: string, language: string): Promise<void>;
+
+  /**
    * Initializes the storage backend.
    * Called once during startup.
    */

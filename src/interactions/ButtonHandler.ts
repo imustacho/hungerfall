@@ -1,6 +1,13 @@
-import { ButtonInteraction, GuildMemberRoleManager } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonInteraction,
+  ButtonStyle,
+  GuildMemberRoleManager,
+} from 'discord.js';
 import { getSessionManager } from '../session/SessionManager.js';
 import { getLocale } from '../i18n/index.js';
+import { LANGUAGE_NAMES, Language } from '../i18n/types.js';
 import { createLogger } from '../utils/logger.js';
 import { interactionQueue } from '../utils/InteractionQueue.js';
 import { GameSession } from '../session/GameSession.js';
@@ -19,6 +26,12 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
     let session: GameSession | undefined;
 
     if (customId.startsWith('lobby_')) {
+      // lobby_lang_ buttons are ephemeral follow-ups — session is found via channelId encoded in customId
+      if (customId.startsWith('lobby_lang_')) {
+        await handleLanguageSelection(interaction);
+        return;
+      }
+
       session = sessionManager.getSession(interaction.channelId);
       if (!session) {
         const strings = getLocale();
@@ -124,9 +137,41 @@ async function handleLobbyButton(interaction: ButtonInteraction, session: GameSe
         }
       }
 
-      lobby.addPlayer(interaction.user.id, interaction.user.displayName);
-      await lobby.updateLobbyMessage();
-      await session.saveActiveState();
+      // Check if user already has a language preference stored
+      const storage = getSessionManager().getStorage();
+      const savedLanguage = await storage.getUserLanguage(interaction.user.id);
+
+      if (savedLanguage) {
+        // User already has a preference — join immediately with their saved language
+        lobby.addPlayer(interaction.user.id, interaction.user.displayName, savedLanguage);
+        await lobby.updateLobbyMessage();
+        await session.saveActiveState();
+      } else {
+        // No saved preference — show language selection buttons
+        const langRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`lobby_lang_en_${interaction.channelId}`)
+            .setLabel('English')
+            .setEmoji('🇬🇧')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId(`lobby_lang_tr_${interaction.channelId}`)
+            .setLabel('Türkçe')
+            .setEmoji('🇹🇷')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId(`lobby_lang_de_${interaction.channelId}`)
+            .setLabel('Deutsch')
+            .setEmoji('🇩🇪')
+            .setStyle(ButtonStyle.Secondary),
+        );
+
+        await interaction.followUp({
+          content: '🌍 **Which language would you like for your DMs?**\n*Hangi dilde DM almak istiyorsunuz? / In welcher Sprache möchten Sie DMs erhalten?*',
+          components: [langRow],
+          ephemeral: true,
+        });
+      }
       break;
     }
 
@@ -175,6 +220,73 @@ async function handleLobbyButton(interaction: ButtonInteraction, session: GameSe
 }
 
 /**
+ * Handles language selection when a user clicks a language button before joining the lobby.
+ * customId format: lobby_lang_{lang}_{channelId}
+ */
+async function handleLanguageSelection(interaction: ButtonInteraction): Promise<void> {
+  // Parse customId: lobby_lang_{lang}_{channelId}
+  const parts = interaction.customId.split('_');
+  // parts = ['lobby', 'lang', 'en', '123456789']
+  const selectedLang = parts[2] as Language;
+  const channelId = parts.slice(3).join('_'); // channelId may contain underscores (unlikely but safe)
+
+  const sessionManager = getSessionManager();
+  const session = sessionManager.getSession(channelId);
+
+  if (!session) {
+    const strings = getLocale();
+    await interaction.reply({
+      content: `❌ ${strings.errNoActiveGame}`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Defer to prevent timeout
+  try {
+    await interaction.deferUpdate();
+  } catch (err: any) {
+    if (err?.code === 10062) {
+      log.debug(`Ignoring stale language selection interaction (expired before restart)`);
+      return;
+    }
+    throw err;
+  }
+
+  await interactionQueue.enqueue(channelId, async () => {
+    try {
+      const lobby = session.getLobbyManager();
+      const storage = sessionManager.getStorage();
+
+      // Save user's language preference to the database
+      await storage.setUserLanguage(interaction.user.id, selectedLang);
+
+      // Join the lobby with the selected language
+      lobby.addPlayer(interaction.user.id, interaction.user.displayName, selectedLang);
+      await lobby.updateLobbyMessage();
+      await session.saveActiveState();
+
+      const langName = LANGUAGE_NAMES[selectedLang] || selectedLang;
+      await interaction.followUp({
+        content: `✅ **${langName}** — OK!`,
+        ephemeral: true,
+      });
+    } catch (error) {
+      if (error instanceof LobbyError) {
+        log.warn(`Language selection join rejected: ${error.code} - ${error.message}`);
+        try {
+          await interaction.followUp({ content: `❌ ${error.message}`, ephemeral: true });
+        } catch {
+          // followUp may fail
+        }
+      } else {
+        throw error;
+      }
+    }
+  });
+}
+
+/**
  * Handles action button clicks in DMs (player action choices).
  */
 async function handleActionButton(interaction: ButtonInteraction, session: GameSession): Promise<void> {
@@ -189,4 +301,3 @@ async function handleActionButton(interaction: ButtonInteraction, session: GameS
 
   await session.handleActionChoice(interaction, actionType);
 }
-

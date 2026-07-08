@@ -37,7 +37,7 @@ export class LobbyManager {
   /**
    * Adds a player to the lobby.
    */
-  addPlayer(userId: string, username: string): void {
+  addPlayer(userId: string, username: string, language: string = 'en'): void {
     const strings = getLocale(this.state.language);
     if (this.state.phase !== 'lobby') {
       throw new LobbyError(strings.errGameStarted, 'GAME_ALREADY_STARTED');
@@ -49,9 +49,9 @@ export class LobbyManager {
       throw new LobbyError(strings.errLobbyFull, 'LOBBY_FULL');
     }
 
-    const player = createPlayer(userId, username, GAME_CONSTANTS.BASE_MAX_HP);
+    const player = createPlayer(userId, username, GAME_CONSTANTS.BASE_MAX_HP, language);
     this.state.players.set(userId, player);
-    log.info(`Player ${username} (${userId}) joined lobby ${this.state.matchId}`);
+    log.info(`Player ${username} (${userId}) joined lobby ${this.state.matchId} [lang: ${language}]`);
   }
 
   /**

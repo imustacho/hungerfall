@@ -292,7 +292,7 @@ export class GameSession {
         if (!deadPlayer) continue;
 
         try {
-          const strings = getLocale(this.state.language);
+          const strings = getLocale(deadPlayer.language);
           const user = await this.client.users.fetch(deadPlayerId, { force: true });
           const dmChannel = await user.createDM();
 
@@ -470,7 +470,8 @@ export class GameSession {
   async handleActionChoice(interaction: ButtonInteraction, actionType: string): Promise<void> {
     const playerId = interaction.user.id;
     const player = this.state.players.get(playerId);
-    const strings = getLocale(this.state.language);
+    const playerLang = player?.language || this.state.language;
+    const strings = getLocale(playerLang);
 
     if (!player || !player.alive) {
       await interaction.followUp({
@@ -505,18 +506,18 @@ export class GameSession {
       if (targets.length === 0) {
         // No valid targets — resolve as defend
         this.dmHandler.handleActionChoice(playerId, 'defend');
-        await interaction.editReply(renderActionConfirmation('defend', undefined, this.state.language));
+        await interaction.editReply(renderActionConfirmation('defend', undefined, playerLang));
         return;
       }
 
-      const rendered = renderTargetSelection(actionType as TargetedActionType, player, targets, this.state.language);
+      const rendered = renderTargetSelection(actionType as TargetedActionType, player, targets, playerLang);
       await interaction.editReply({
         components: rendered.components,
         flags: rendered.flags,
       });
     } else {
       // Immediate action — show confirmation
-      const rendered = renderActionConfirmation(actionType as any, undefined, this.state.language);
+      const rendered = renderActionConfirmation(actionType as any, undefined, playerLang);
       await interaction.editReply({
         components: rendered.components,
         flags: rendered.flags,
@@ -534,7 +535,8 @@ export class GameSession {
   ): Promise<void> {
     const playerId = interaction.user.id;
     const player = this.state.players.get(playerId);
-    const strings = getLocale(this.state.language);
+    const playerLang = player?.language || this.state.language;
+    const strings = getLocale(playerLang);
 
     if (!player || !player.alive) {
       await interaction.followUp({
@@ -555,7 +557,7 @@ export class GameSession {
     this.dmHandler.handleTargetChoice(playerId, actionType, targetId);
 
     const target = this.state.players.get(targetId);
-    const rendered = renderActionConfirmation(actionType as any, target?.username, this.state.language);
+    const rendered = renderActionConfirmation(actionType as any, target?.username, playerLang);
     await interaction.editReply({
       components: rendered.components,
       flags: rendered.flags,
@@ -569,7 +571,8 @@ export class GameSession {
   async handleItemUseDirect(interaction: ButtonInteraction, itemId: string): Promise<void> {
     const playerId = interaction.user.id;
     const player = this.state.players.get(playerId);
-    const strings = getLocale(this.state.language);
+    const playerLang = player?.language || this.state.language;
+    const strings = getLocale(playerLang);
 
     if (!player || !player.alive) {
       await interaction.followUp({ content: `❌ ${strings.errPlayerDead}`, ephemeral: true });
@@ -589,7 +592,7 @@ export class GameSession {
 
     // Show confirmation and re-render action choice screen with new player state
     const allPlayers = Array.from(this.state.players.values());
-    const actionRendered = renderActionChoice(player, this.state.round + 1, allPlayers, this.state.language);
+    const actionRendered = renderActionChoice(player, this.state.round + 1, allPlayers, playerLang);
 
     const confirmText = strings.dmItemUsed(result.itemName, result.effectDesc);
 

@@ -25,6 +25,8 @@ export interface MatchRecord {
  */
 export interface MatchSummary {
   matchId: string;
+  guildId: string;
+  channelId: string;
   winnerId: string | null;
   winnerName: string | null;
   playerCount: number;

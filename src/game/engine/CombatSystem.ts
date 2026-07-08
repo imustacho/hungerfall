@@ -33,7 +33,7 @@ export class CombatSystem {
 
     // ── Check evasion ─────────────────────────────────
     const isHidden = target.statusEffects.some(e => e.type === 'hidden');
-    const hasMoved = target.statusEffects.some(e => e.type === 'defended' && target.metadata['moved'] === true);
+    const hasMoved = target.metadata['moved'] === true;
 
     if (isHidden) {
       const evasionChance = GAME_CONSTANTS.HIDE_EVASION_CHANCE +
@@ -47,6 +47,22 @@ export class CombatSystem {
           reason: 'hidden',
         });
         log.debug(`${target.username} evaded attack from ${attacker.username} (hidden)`);
+        return { damageEvents: events, evasionEvents };
+      }
+    }
+
+    if (hasMoved) {
+      const moveEvasionChance = GAME_CONSTANTS.MOVE_EVASION_CHANCE +
+        this.getEvasionBonus(target);
+
+      if (rng.chance(moveEvasionChance)) {
+        evasionEvents.push({
+          type: 'evasion',
+          attackerId: attacker.id,
+          targetId: target.id,
+          reason: 'moved',
+        });
+        log.debug(`${target.username} evaded attack from ${attacker.username} (moved)`);
         return { damageEvents: events, evasionEvents };
       }
     }

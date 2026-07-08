@@ -4,7 +4,7 @@ import { Narrator } from '../narrator/Narrator.js';
 import { AINarrator } from '../narrator/AINarrator.js';
 import { FallbackNarrator } from '../narrator/FallbackNarrator.js';
 import { StorageProvider } from '../storage/StorageProvider.js';
-import { JsonStorage } from '../storage/JsonStorage.js';
+import { MongoStorage } from '../storage/MongoStorage.js';
 import { getConfig } from '../config.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -37,17 +37,22 @@ export class SessionManager {
       log.info('Using Fallback Narrator (no AI_API_KEY configured)');
     }
 
-    // Initialize JSON storage
-    this.storage = new JsonStorage(config.dataPath);
+    // Initialize MongoDB storage
+    this.storage = new MongoStorage(config.mongoUri);
     this.initStorage().catch(err => {
-      log.warn('JSON storage initialization failed — match records will be lost', err);
+      log.warn('MongoDB initialization failed — match records will be lost', err);
     });
+  }
+
+  /** Returns the storage provider (for external access, e.g. language prefs) */
+  getStorage(): StorageProvider {
+    return this.storage;
   }
 
   private async initStorage(): Promise<void> {
     try {
-      await (this.storage as JsonStorage).initialize();
-      log.info('JSON storage initialized');
+      await this.storage.initialize();
+      log.info('MongoDB storage initialized');
 
       // Wait for the Discord client to be fully connected before resuming sessions.
       // Without this, channels.fetch() and users.fetch() fail because the gateway

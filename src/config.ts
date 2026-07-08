@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import path from 'path';
 
 dotenv.config();
 
@@ -16,8 +15,8 @@ export interface AppConfig {
   aiBaseUrl: string;
   /** Model name to use for narration (e.g. gpt-4o-mini, llama3, gemini-2.0-flash) */
   aiModel: string;
-  /** Path to the JSON data file for match storage */
-  dataPath: string;
+  /** MongoDB connection URI */
+  mongoUri: string;
   /** Logging level */
   logLevel: string;
 }
@@ -43,7 +42,7 @@ export function loadConfig(): AppConfig {
     aiApiKey: optionalEnv('AI_API_KEY', ''),
     aiBaseUrl: optionalEnv('AI_BASE_URL', 'https://api.openai.com/v1'),
     aiModel: optionalEnv('AI_MODEL', 'gpt-4o-mini'),
-    dataPath: optionalEnv('DATA_PATH', './data/matches.json'),
+    mongoUri: optionalEnv('MONGO_URI', 'mongodb://localhost:27017/hungerfall'),
     logLevel: optionalEnv('LOG_LEVEL', 'info'),
   };
 }
