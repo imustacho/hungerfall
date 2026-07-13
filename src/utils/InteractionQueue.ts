@@ -18,24 +18,23 @@ class InteractionQueue {
   async enqueue<T>(channelId: string, task: () => Promise<T>): Promise<T> {
     const previous = this.queues.get(channelId) || Promise.resolve();
 
-    const current = (async () => {
+    let current: Promise<T> | null = null;
+    current = (async () => {
       try {
         await previous;
       } catch (err) {
         log.error(`Queue error in preceding task for channel ${channelId}`, err);
       }
-      return await task();
+      try {
+        return await task();
+      } finally {
+        if (current && this.queues.get(channelId) === current) {
+          this.queues.delete(channelId);
+        }
+      }
     })();
 
     this.queues.set(channelId, current);
-
-    // Cleanup queue map after task finishes to release memory
-    current.finally(() => {
-      if (this.queues.get(channelId) === current) {
-        this.queues.delete(channelId);
-      }
-    });
-
     return current;
   }
 }

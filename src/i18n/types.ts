@@ -123,6 +123,8 @@ export interface LocaleStrings {
   gameOverRounds: string;
   gameOverPlayersLabel: string;
   gameOverTotalDeaths: string;
+  threadWinnerAnnounce: (winnerMention: string) => string;
+  threadNoSurvivorsAnnounce: string;
 
   // ── Fallback narrator ───────────────────────────────
   narratorAttack: (attacker: string, target: string, damage: number) => string;
@@ -151,6 +153,7 @@ export interface LocaleStrings {
   errInvalidTarget: string;
   errServerOnly: string;
   errUnknownCommand: string;
+  errDatabase: string;
   threadName: (matchId: string) => string;
   dmDeathTitle: string;
   dmDeathKilledBy: (killer: string) => string;

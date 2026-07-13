@@ -354,10 +354,36 @@ export class GameSession {
   private async handleGameOver(): Promise<void> {
     this.running = false;
 
+    const gameOverRendered = renderGameOver(this.state);
+
+    // Edit the first sent message (lobbyMessage) at the start/head of the thread
+    const lobbyMessage = this.lobby.getLobbyMessage();
+    if (lobbyMessage) {
+      try {
+        await lobbyMessage.edit({
+          components: gameOverRendered.components,
+          flags: gameOverRendered.flags,
+        });
+        log.info(`Edited lobby message with final game over display for match ${this.state.matchId}`);
+      } catch (err) {
+        log.error('Failed to edit lobby message on game over', err);
+      }
+    }
+
+    // Send only a simplified winner/draw announcement in the thread target
     const target = this.postTarget;
     if (target) {
-      const gameOverEmbed = renderGameOver(this.state);
-      await target.send({ embeds: [gameOverEmbed] });
+      const strings = getLocale(this.state.language);
+      const winner = this.state.winnerId ? this.state.players.get(this.state.winnerId) : null;
+      const announcement = winner
+        ? strings.threadWinnerAnnounce(`<@${winner.id}>`)
+        : strings.threadNoSurvivorsAnnounce;
+
+      try {
+        await target.send({ content: announcement });
+      } catch (err) {
+        log.error('Failed to send winner announcement in thread', err);
+      }
     }
 
     // Save match to storage
@@ -380,8 +406,16 @@ export class GameSession {
 
       // Deletes the active session from the database on game completion
       await this.storage.deleteActiveSession(this.state.channelId);
+
+      // Clean up session in memory SessionManager to allow future matches in this channel
+      try {
+        const { getSessionManager } = await import('./SessionManager.js');
+        getSessionManager().endSession(this.state.channelId);
+      } catch (err) {
+        log.error('Failed to end session in SessionManager memory', err);
+      }
     } catch (error) {
-      log.error('Failed to save match', error);
+      log.error('Failed to save match or clean up session', error);
     }
 
     log.info(`Game over: ${this.state.matchId}. Winner: ${this.state.winnerId || 'None'}`);

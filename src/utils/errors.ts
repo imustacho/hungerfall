@@ -61,3 +61,21 @@ export class InteractionError extends HungerfallError {
     this.name = 'InteractionError';
   }
 }
+
+/**
+ * Checks if an error is a database/mongoose error.
+ */
+export function isDatabaseError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return (
+      error.name === 'MongooseError' ||
+      error.name === 'MongoError' ||
+      error.name === 'MongoServerError' ||
+      error.name === 'MongoNetworkError' ||
+      error.message.includes('buffering timed out') ||
+      error.message.includes('MongoServerSelectionError') ||
+      error.message.includes('connection')
+    );
+  }
+  return false;
+}

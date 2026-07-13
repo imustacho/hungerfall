@@ -1,4 +1,12 @@
-import { EmbedBuilder, ColorResolvable } from 'discord.js';
+import {
+  EmbedBuilder,
+  ColorResolvable,
+  ContainerBuilder,
+  MessageFlags,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+} from 'discord.js';
 import { GameState, getAlivePlayers } from '../game/models/GameState.js';
 import { Player } from '../game/models/Player.js';
 import { RoundResult } from '../game/models/RoundResult.js';
@@ -131,26 +139,30 @@ export function renderRoundSummary(
 }
 
 /**
- * Renders the game over / winner embed.
+ * Renders the game over / winner display as Components V2.
+ * Returns { components, flags } ready for message.edit() on the lobby message.
  */
-export function renderGameOver(state: GameState): EmbedBuilder {
+export function renderGameOver(state: GameState) {
   const strings = getLocale(state.language);
   const winner = state.winnerId ? state.players.get(state.winnerId) : null;
   const allPlayers = Array.from(state.players.values());
 
-  const embed = new EmbedBuilder()
-    .setTitle(strings.gameOverTitle)
-    .setColor(COLORS.victory)
-    .setTimestamp();
+  // ── Title ───────────────────────────────────────────
+  const title = new TextDisplayBuilder()
+    .setContent(`🏆 **${strings.gameOverTitle}**`);
 
+  // ── Winner / Draw description ───────────────────────
+  let description: string;
   if (winner) {
-    embed.setDescription(
+    description =
       strings.gameOverWinner(winner.username) + '\n\n' +
-      strings.gameOverWinnerStats(winner.roundsSurvived, winner.damageDealt, winner.kills)
-    );
+      strings.gameOverWinnerStats(winner.roundsSurvived, winner.damageDealt, winner.kills);
   } else {
-    embed.setDescription(strings.gameOverNoSurvivors);
+    description = strings.gameOverNoSurvivors;
   }
+
+  const descSection = new TextDisplayBuilder()
+    .setContent(description);
 
   // ── Leaderboard ─────────────────────────────────────
   const sorted = [...allPlayers].sort((a, b) => {
@@ -164,11 +176,8 @@ export function renderGameOver(state: GameState): EmbedBuilder {
     return `${medal} ${status} **${p.username}** — ${p.kills} ${strings.kills}, ${p.damageDealt} ${strings.dmg}, ${p.roundsSurvived} ${strings.rounds}`;
   });
 
-  embed.addFields({
-    name: strings.gameOverLeaderboard,
-    value: leaderboard.join('\n'),
-    inline: false,
-  });
+  const leaderboardSection = new TextDisplayBuilder()
+    .setContent(`**${strings.gameOverLeaderboard}**\n${leaderboard.join('\n')}`);
 
   // ── Match stats ─────────────────────────────────────
   const duration = state.endedAt && state.startedAt
@@ -177,18 +186,41 @@ export function renderGameOver(state: GameState): EmbedBuilder {
   const minutes = Math.floor(duration / 60);
   const seconds = duration % 60;
 
-  embed.addFields({
-    name: strings.gameOverStats,
-    value: [
-      `${strings.gameOverDuration}: ${minutes}m ${seconds}s`,
-      `${strings.gameOverRounds}: ${state.round}`,
-      `${strings.gameOverPlayersLabel}: ${allPlayers.length}`,
-      `${strings.gameOverTotalDeaths}: ${allPlayers.filter(p => !p.alive).length}`,
-    ].join('\n'),
-    inline: false,
-  });
+  const statsSection = new TextDisplayBuilder()
+    .setContent(
+      `**${strings.gameOverStats}**\n` +
+      `${strings.gameOverDuration}: ${minutes}m ${seconds}s\n` +
+      `${strings.gameOverRounds}: ${state.round}\n` +
+      `${strings.gameOverPlayersLabel}: ${allPlayers.length}\n` +
+      `${strings.gameOverTotalDeaths}: ${allPlayers.filter(p => !p.alive).length}`
+    );
 
-  embed.setFooter({ text: `${strings.lobbyMatch}: ${state.matchId}` });
+  const footer = new TextDisplayBuilder()
+    .setContent(`🎲 ${strings.lobbyMatch}: \`${state.matchId}\``);
 
-  return embed;
+  // ── Assemble container ──────────────────────────────
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(title)
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small)
+    )
+    .addTextDisplayComponents(descSection)
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small)
+    )
+    .addTextDisplayComponents(leaderboardSection)
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small)
+    )
+    .addTextDisplayComponents(statsSection)
+    .addSeparatorComponents(
+      new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small)
+    )
+    .addTextDisplayComponents(footer);
+
+  return {
+    components: [container],
+    flags: [MessageFlags.IsComponentsV2] as const,
+  };
 }
+

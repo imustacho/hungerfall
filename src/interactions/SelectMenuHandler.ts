@@ -5,6 +5,8 @@ import { createLogger } from '../utils/logger.js';
 import { interactionQueue } from '../utils/InteractionQueue.js';
 import { GameSession } from '../session/GameSession.js';
 
+import { isDatabaseError } from '../utils/errors.js';
+
 const log = createLogger('SelectMenuHandler');
 
 /**
@@ -14,12 +16,13 @@ export async function handleSelectMenuInteraction(
   interaction: AnySelectMenuInteraction,
 ): Promise<void> {
   const customId = interaction.customId;
+  let session: GameSession | undefined;
 
   try {
     // ── Target selection for actions ──────────────────
     if (customId.startsWith('target_')) {
       const sessionManager = getSessionManager();
-      const session = sessionManager.getSessionByPlayer(interaction.user.id);
+      session = sessionManager.getSessionByPlayer(interaction.user.id);
 
       if (!session) {
         const strings = getLocale();
@@ -53,11 +56,12 @@ export async function handleSelectMenuInteraction(
   } catch (error) {
     log.error(`Select menu handler error for ${customId}`, error);
     try {
-      const message = error instanceof Error ? error.message : 'Something went wrong.';
+      const strings = getLocale(session?.getState().language);
+      const message = isDatabaseError(error) ? strings.errDatabase : `❌ ${error instanceof Error ? error.message : 'Something went wrong.'}`;
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: `❌ ${message}`, ephemeral: true });
+        await interaction.followUp({ content: message, ephemeral: true });
       } else {
-        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
+        await interaction.reply({ content: message, ephemeral: true });
       }
     } catch {
       // Interaction may have timed out

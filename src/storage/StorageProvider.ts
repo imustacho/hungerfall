@@ -53,6 +53,11 @@ export interface StorageProvider {
   initialize(): Promise<void>;
 
   /**
+   * Checks if the storage connection is active.
+   */
+  isConnected?(): boolean;
+
+  /**
    * Closes the storage connection gracefully.
    */
   close(): Promise<void>;

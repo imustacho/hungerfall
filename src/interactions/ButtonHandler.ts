@@ -11,7 +11,7 @@ import { LANGUAGE_NAMES, Language } from '../i18n/types.js';
 import { createLogger } from '../utils/logger.js';
 import { interactionQueue } from '../utils/InteractionQueue.js';
 import { GameSession } from '../session/GameSession.js';
-import { LobbyError } from '../utils/errors.js';
+import { LobbyError, isDatabaseError } from '../utils/errors.js';
 
 const log = createLogger('ButtonHandler');
 
@@ -20,10 +20,10 @@ const log = createLogger('ButtonHandler');
  */
 export async function handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
   const customId = interaction.customId;
+  let session: GameSession | undefined;
 
   try {
     const sessionManager = getSessionManager();
-    let session: GameSession | undefined;
 
     if (customId.startsWith('lobby_')) {
       // lobby_lang_ buttons are ephemeral follow-ups — session is found via channelId encoded in customId
@@ -97,11 +97,12 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
   } catch (error) {
     log.error(`Button handler error for ${customId}`, error);
     try {
-      const message = error instanceof Error ? error.message : 'Something went wrong.';
+      const strings = getLocale(session?.getState().language);
+      const message = isDatabaseError(error) ? strings.errDatabase : `❌ ${error instanceof Error ? error.message : 'Something went wrong.'}`;
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: `❌ ${message}`, ephemeral: true });
+        await interaction.followUp({ content: message, ephemeral: true });
       } else {
-        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
+        await interaction.reply({ content: message, ephemeral: true });
       }
     } catch {
       // Interaction may have timed out

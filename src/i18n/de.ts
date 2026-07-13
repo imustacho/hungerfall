@@ -97,6 +97,8 @@ export const deStrings: LocaleStrings = {
   gameOverRounds: '🔄 Runden',
   gameOverPlayersLabel: '👥 Spieler',
   gameOverTotalDeaths: '💀 Tode',
+  threadWinnerAnnounce: (winnerMention) => `🏆 ${winnerMention} hat das Spiel gewonnen!`,
+  threadNoSurvivorsAnnounce: '💀 Keine Überlebenden! Alle sind gestorben...',
 
   narratorAttack: (attacker, target, damage) => `**${attacker}** greift **${target}** an und verursacht ${damage} Schaden.`,
   narratorAttackDefended: (attacker, target, damage) => `**${attacker}** schlägt nach **${target}**, aber die Abwehr steht — nur ${damage} Schaden dringt durch.`,
@@ -122,6 +124,7 @@ export const deStrings: LocaleStrings = {
   errInvalidTarget: '❌ Ungültige Zielauswahl.',
   errServerOnly: '❌ Dieser Befehl kann nur in einem Serverkanal verwendet werden.',
   errUnknownCommand: '❌ Unbekannter Befehl.',
+  errDatabase: '❌ Datenbankverbindung ist derzeit nicht verfügbar. Bitte versuchen Sie es später noch einmal.',
   threadName: (matchId) => `⚔️ Hungerfall — Spiel ${matchId}`,
   dmDeathTitle: '💀 Du bist ausgeschieden!',
   dmDeathKilledBy: (killer) => `Du wurdest von **${killer}** getötet.`,

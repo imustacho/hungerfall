@@ -41,6 +41,16 @@ const gameCommand: BotCommand = {
     const strings = getLocale(language);
     const sessionManager = getSessionManager();
 
+    // Check if the database connection is available
+    const storage = sessionManager.getStorage();
+    if (storage.isConnected && !storage.isConnected()) {
+      await interaction.reply({
+        content: strings.errDatabase,
+        ephemeral: true,
+      });
+      return;
+    }
+
     // Check if a game is already active in this channel
     if (sessionManager.hasSession(interaction.channelId)) {
       await interaction.reply({

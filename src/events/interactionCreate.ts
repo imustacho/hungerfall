@@ -5,6 +5,8 @@ import { handleButtonInteraction } from '../interactions/ButtonHandler.js';
 import { handleSelectMenuInteraction } from '../interactions/SelectMenuHandler.js';
 import { getLocale } from '../i18n/index.js';
 
+import { isDatabaseError } from '../utils/errors.js';
+
 const log = createLogger('Interaction');
 
 /**
@@ -54,8 +56,15 @@ export function registerInteractionEvent(client: ExtendedClient): void {
 
       // Try to inform the user
       try {
-        const strings = getLocale();
-        const reply = { content: strings.errorGeneric, ephemeral: true };
+        // Try to infer language from interaction options if it was `/game` command, otherwise default
+        let lang: string | undefined;
+        if (interaction.isChatInputCommand()) {
+          lang = interaction.options.getString('language') || undefined;
+        }
+        const strings = getLocale(lang);
+        const message = isDatabaseError(error) ? strings.errDatabase : strings.errorGeneric;
+        const reply = { content: message, ephemeral: true };
+
         if (interaction.isRepliable()) {
           if (interaction.replied || interaction.deferred) {
             await interaction.followUp(reply);

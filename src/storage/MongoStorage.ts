@@ -25,7 +25,13 @@ export class MongoStorage implements StorageProvider {
    */
   async initialize(): Promise<void> {
     try {
-      await mongoose.connect(this.uri);
+      // Disable command buffering globally so that database operations fail immediately
+      // when MongoDB is disconnected instead of hanging for 10 seconds.
+      mongoose.set('bufferCommands', false);
+
+      await mongoose.connect(this.uri, {
+        serverSelectionTimeoutMS: 5000, // Timeout connection attempt after 5 seconds if MongoDB is offline
+      });
       log.info(`Connected to MongoDB at ${this.uri}`);
     } catch (error) {
       log.error('Failed to connect to MongoDB', error);
@@ -182,6 +188,13 @@ export class MongoStorage implements StorageProvider {
       { upsert: true },
     );
     log.info(`User ${userId} language preference set to ${language}`);
+  }
+
+  /**
+   * Checks if MongoDB connection is active (readyState === 1).
+   */
+  isConnected(): boolean {
+    return mongoose.connection.readyState === 1;
   }
 }
 

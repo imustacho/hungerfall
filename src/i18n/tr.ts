@@ -97,6 +97,8 @@ export const trStrings: LocaleStrings = {
   gameOverRounds: '🔄 Tur Sayısı',
   gameOverPlayersLabel: '👥 Oyuncu Sayısı',
   gameOverTotalDeaths: '💀 Toplam Ölüm',
+  threadWinnerAnnounce: (winnerMention) => `🏆 ${winnerMention} oyunu kazandı!`,
+  threadNoSurvivorsAnnounce: '💀 Hayatta kalan yok! Herkes öldü...',
 
   narratorAttack: (attacker, target, damage) => `**${attacker}**, **${target}** oyuncusuna saldırıp ${damage} hasar veriyor.`,
   narratorAttackDefended: (attacker, target, damage) => `**${attacker}**, **${target}** oyuncusuna vurmaya çalışıyor ama hedef gardını alıyor — sadece ${damage} hasar işliyor.`,
@@ -122,6 +124,7 @@ export const trStrings: LocaleStrings = {
   errInvalidTarget: '❌ Geçersiz hedef seçimi.',
   errServerOnly: '❌ Bu komut yalnızca sunucu kanallarında kullanılabilir.',
   errUnknownCommand: '❌ Bilinmeyen komut.',
+  errDatabase: '❌ Veritabanı bağlantısı şu anda kurulamıyor. Lütfen daha sonra tekrar deneyin.',
   threadName: (matchId) => `⚔️ Hungerfall — Eşleşme ${matchId}`,
   dmDeathTitle: '💀 Elendin!',
   dmDeathKilledBy: (killer) => `**${killer}** tarafından öldürüldün.`,
