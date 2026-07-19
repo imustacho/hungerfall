@@ -78,10 +78,10 @@ export class LobbyManager {
   }
 
   /**
-   * Requests a team for a player. Pairs them with the next player requesting a team.
-   * Returns true if a team was formed, false if waiting for a partner.
+   * Sends a team invite from one player to another.
+   * The target must accept for the team to form.
    */
-  requestTeam(userId: string): { formed: boolean; partnerId?: string; teamId?: string } {
+  requestTeamWithTarget(userId: string, targetId: string): { sent: boolean; targetName: string } {
     const strings = getLocale(this.state.language);
     if (this.state.phase !== 'lobby') {
       throw new LobbyError(strings.errGameStarted, 'GAME_ALREADY_STARTED');
@@ -94,34 +94,105 @@ export class LobbyManager {
     if (player.teamId) {
       throw new LobbyError(strings.errAlreadyInTeam, 'ALREADY_IN_TEAM');
     }
-
-    // Find another player waiting for a team
-    const waitingPartner = Array.from(this.state.players.values()).find(
-      p => p.id !== userId && !p.teamId && p.metadata['wantsTeam'] === true
-    );
-
-    if (waitingPartner) {
-      // Form a team
-      const teamId = String(this.state.nextTeamId++);
-      player.teamId = teamId;
-      waitingPartner.teamId = teamId;
-      delete player.metadata['wantsTeam'];
-      delete waitingPartner.metadata['wantsTeam'];
-
-      log.info(`Team ${teamId} formed: ${player.username} + ${waitingPartner.username}`);
-      return { formed: true, partnerId: waitingPartner.id, teamId };
-    } else {
-      // Mark as waiting
-      player.metadata['wantsTeam'] = true;
-      log.info(`Player ${player.username} is looking for a teammate`);
-      return { formed: false };
+    if (userId === targetId) {
+      throw new LobbyError(strings.errTeamInviteSelf, 'TEAM_INVITE_SELF');
     }
+
+    const target = this.state.players.get(targetId);
+    if (!target) {
+      throw new LobbyError(strings.errNotInGame, 'TARGET_NOT_IN_GAME');
+    }
+    if (target.teamId) {
+      throw new LobbyError(strings.errTeamTargetInTeam, 'TARGET_IN_TEAM');
+    }
+
+    // Store the pending invite in metadata
+    target.metadata['pendingTeamInviteFrom'] = userId;
+    log.info(`Team invite: ${player.username} → ${target.username}`);
+    return { sent: true, targetName: target.username };
+  }
+
+  /**
+   * Accepts a pending team invite.
+   */
+  acceptTeamInvite(userId: string): { formed: boolean; partnerId: string; partnerName: string; teamId: string } {
+    const strings = getLocale(this.state.language);
+    if (this.state.phase !== 'lobby') {
+      throw new LobbyError(strings.errGameStarted, 'GAME_ALREADY_STARTED');
+    }
+
+    const player = this.state.players.get(userId);
+    if (!player) {
+      throw new LobbyError(strings.errNotInGame, 'NOT_IN_GAME');
+    }
+
+    const inviterId = player.metadata['pendingTeamInviteFrom'] as string | undefined;
+    if (!inviterId) {
+      throw new LobbyError(strings.errTeamNoInvite, 'NO_INVITE');
+    }
+
+    const inviter = this.state.players.get(inviterId);
+    if (!inviter) {
+      delete player.metadata['pendingTeamInviteFrom'];
+      throw new LobbyError(strings.errTeamNoInvite, 'INVITER_LEFT');
+    }
+
+    // Check if inviter already joined a team while waiting
+    if (inviter.teamId) {
+      delete player.metadata['pendingTeamInviteFrom'];
+      throw new LobbyError(strings.errTeamTargetInTeam, 'INVITER_IN_TEAM');
+    }
+    if (player.teamId) {
+      delete player.metadata['pendingTeamInviteFrom'];
+      throw new LobbyError(strings.errAlreadyInTeam, 'ALREADY_IN_TEAM');
+    }
+
+    // Form the team
+    const teamId = String(this.state.nextTeamId++);
+    player.teamId = teamId;
+    inviter.teamId = teamId;
+    delete player.metadata['pendingTeamInviteFrom'];
+    delete player.metadata['wantsTeam'];
+    delete inviter.metadata['wantsTeam'];
+
+    log.info(`Team ${teamId} formed: ${inviter.username} + ${player.username}`);
+    return { formed: true, partnerId: inviterId, partnerName: inviter.username, teamId };
+  }
+
+  /**
+   * Declines a pending team invite.
+   */
+  declineTeamInvite(userId: string): { declined: boolean; inviterId: string } {
+    const strings = getLocale(this.state.language);
+
+    const player = this.state.players.get(userId);
+    if (!player) {
+      throw new LobbyError(strings.errNotInGame, 'NOT_IN_GAME');
+    }
+
+    const inviterId = player.metadata['pendingTeamInviteFrom'] as string | undefined;
+    if (!inviterId) {
+      throw new LobbyError(strings.errTeamNoInvite, 'NO_INVITE');
+    }
+
+    delete player.metadata['pendingTeamInviteFrom'];
+    log.info(`Team invite declined: ${player.username} rejected invite from ${inviterId}`);
+    return { declined: true, inviterId };
+  }
+
+  /**
+   * Returns available players for team invite (not in a team, not the requester).
+   */
+  getAvailableTeamTargets(userId: string): Array<{ id: string; username: string }> {
+    return Array.from(this.state.players.values())
+      .filter(p => p.id !== userId && !p.teamId)
+      .map(p => ({ id: p.id, username: p.username }));
   }
 
   /**
    * Dissolves a team and removes all players from it.
    */
-  private dissolveTeam(teamId: string): void {
+  dissolveTeam(teamId: string): void {
     for (const player of this.state.players.values()) {
       if (player.teamId === teamId) {
         player.teamId = null;

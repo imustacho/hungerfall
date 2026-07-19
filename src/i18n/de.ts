@@ -135,4 +135,26 @@ export const deStrings: LocaleStrings = {
   kills: 'Kills',
   dmg: 'Schaden',
   rounds: 'Runden',
+
+  // ── Team invite system ──────────────────────────────
+  teamInviteSent: (targetName) => `🤝 Team-Einladung an **${targetName}** gesendet! Warte auf Antwort...`,
+  teamInviteReceived: (fromName) => `🤝 **${fromName}** möchte ein Team mit dir bilden!`,
+  teamInviteAccepted: (partnerName) => `🤝 Du bist nun im Team mit **${partnerName}**!`,
+  teamInviteDeclined: (targetName) => `❌ **${targetName}** hat deine Team-Einladung abgelehnt.`,
+  teamInviteExpired: '⏰ Team-Einladung abgelaufen.',
+  teamSelectTarget: '🤝 Wähle einen Spieler, den du in dein Team einladen möchtest:',
+  teamSelectPlaceholder: 'Spieler auswählen...',
+  teamBtnAccept: 'Annehmen',
+  teamBtnDecline: 'Ablehnen',
+  errTeamInviteSelf: 'Du kannst dich nicht selbst einladen!',
+  errTeamTargetInTeam: 'Dieser Spieler ist bereits in einem Team!',
+  errTeamNoInvite: 'Keine ausstehende Team-Einladung gefunden.',
+
+  // ── DM failure notification ─────────────────────────
+  dmFailedNotice: (playerMentions) => `⚠️ DMs konnten nicht gesendet werden an: ${playerMentions}. Sie werden sich diese Runde verteidigen. Bitte aktiviert DMs von Servermitgliedern!`,
+
+  // ── Team victory ────────────────────────────────────
+  gameOverTeamWinner: (names) => `# 👑 Teamsieg! ${names} sind die letzten Überlebenden!`,
+  gameOverTeamWinnerStats: (playerCount, rounds) => `**${playerCount}** Teammitglieder haben gemeinsam **${rounds}** Runden überlebt.`,
+  threadTeamWinnerAnnounce: (mentions) => `🏆 ${mentions} haben das Spiel als Team gewonnen!`,
 };

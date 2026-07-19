@@ -244,7 +244,18 @@ export class GameSession {
     }
 
     // ── 3. Collect actions via DMs ────────────────────
-    const actions = await this.dmHandler.collectActions(this.state, selectedIds);
+    const { actions, failedDMs } = await this.dmHandler.collectActions(this.state, selectedIds);
+
+    // ── 3b. Notify channel about failed DMs ──────────
+    if (failedDMs.length > 0 && target) {
+      const strings = getLocale(this.state.language);
+      const mentions = failedDMs.map(id => `<@${id}>`).join(', ');
+      try {
+        await target.send({ content: strings.dmFailedNotice(mentions) });
+      } catch {
+        // Channel send may fail — not critical
+      }
+    }
 
     // ── 4. Run engine ─────────────────────────────────
     const result = this.engine.executeRound(this.state, actions, this.rng);
@@ -370,14 +381,30 @@ export class GameSession {
       }
     }
 
-    // Send only a simplified winner/draw announcement in the thread target
+    // Send winner/draw announcement in the thread target
     const target = this.postTarget;
     if (target) {
       const strings = getLocale(this.state.language);
-      const winner = this.state.winnerId ? this.state.players.get(this.state.winnerId) : null;
-      const announcement = winner
-        ? strings.threadWinnerAnnounce(`<@${winner.id}>`)
-        : strings.threadNoSurvivorsAnnounce;
+      const allPlayers = Array.from(this.state.players.values());
+
+      // Determine the announcement based on solo/team/draw
+      const isTeamWin = this.state.winnerTeamId !== null && !this.state.winnerId;
+      let announcement: string;
+
+      if (isTeamWin) {
+        const teamWinners = allPlayers.filter(
+          p => p.teamId === this.state.winnerTeamId && p.alive
+        );
+        const mentions = teamWinners.map(p => `<@${p.id}>`).join(' & ');
+        announcement = strings.threadTeamWinnerAnnounce(mentions);
+      } else if (this.state.winnerId) {
+        const winner = this.state.players.get(this.state.winnerId);
+        announcement = winner
+          ? strings.threadWinnerAnnounce(`<@${winner.id}>`)
+          : strings.threadNoSurvivorsAnnounce;
+      } else {
+        announcement = strings.threadNoSurvivorsAnnounce;
+      }
 
       try {
         await target.send({ content: announcement });
@@ -389,12 +416,17 @@ export class GameSession {
     // Save match to storage
     try {
       const winner = this.state.winnerId ? this.state.players.get(this.state.winnerId) : null;
+      const allPlayers = Array.from(this.state.players.values());
+      const teamWinners = this.state.winnerTeamId
+        ? allPlayers.filter(p => p.teamId === this.state.winnerTeamId && p.alive)
+        : [];
+
       await this.storage.saveMatch({
         matchId: this.state.matchId,
         guildId: this.state.guildId,
         channelId: this.state.channelId,
         winnerId: this.state.winnerId,
-        winnerName: winner?.username || null,
+        winnerName: winner?.username || (teamWinners.length > 0 ? teamWinners.map(p => p.username).join(' & ') : null),
         playerCount: this.state.players.size,
         roundCount: this.state.round,
         seed: this.state.seed,
@@ -418,7 +450,7 @@ export class GameSession {
       log.error('Failed to save match or clean up session', error);
     }
 
-    log.info(`Game over: ${this.state.matchId}. Winner: ${this.state.winnerId || 'None'}`);
+    log.info(`Game over: ${this.state.matchId}. Winner: ${this.state.winnerId || this.state.winnerTeamId || 'None'}`);
   }
 
   /**

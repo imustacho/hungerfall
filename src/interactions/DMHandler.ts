@@ -39,8 +39,9 @@ export class DMHandler {
     state: GameState,
     selectedPlayerIds: string[],
     timeoutMs: number = GAME_CONSTANTS.ACTION_TIMEOUT_MS,
-  ): Promise<Map<string, Action>> {
+  ): Promise<{ actions: Map<string, Action>; failedDMs: string[] }> {
     const actions = new Map<string, Action>();
+    const failedDMs: string[] = [];
     const allPlayers = Array.from(state.players.values());
 
     // ── PRE-RESERVE all pending slots BEFORE sending DMs ──────────────
@@ -63,6 +64,7 @@ export class DMHandler {
         // Player can't receive DMs — cancel the pending slot and use default
         this.cancelPendingAction(playerId);
         actions.set(playerId, { type: 'defend' });
+        failedDMs.push(playerId);
       }
     });
 
@@ -108,7 +110,7 @@ export class DMHandler {
     this.pendingActions.clear();
     this.dmMessages.clear();
 
-    return actions;
+    return { actions, failedDMs };
   }
 
   /**

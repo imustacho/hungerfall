@@ -199,19 +199,86 @@ async function handleLobbyButton(interaction: ButtonInteraction, session: GameSe
     }
 
     case 'team': {
-      const result = lobby.requestTeam(interaction.user.id);
+      // Show a select menu of available players to invite
+      const targets = lobby.getAvailableTeamTargets(interaction.user.id);
 
-      if (result.formed) {
-        await lobby.updateLobbyMessage();
-      } else {
-        await lobby.updateLobbyMessage();
-        // Notify user they're waiting
+      if (targets.length === 0) {
         await interaction.followUp({
-          content: strings.teamSearching,
+          content: `❌ ${strings.errNotInGame}`,
           ephemeral: true,
         });
+        return;
       }
+
+      const { StringSelectMenuBuilder, ActionRowBuilder: ActionRow } = await import('discord.js');
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`team_invite_select_${interaction.channelId}`)
+        .setPlaceholder(strings.teamSelectPlaceholder)
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(
+          targets.map(t => ({
+            label: t.username,
+            value: t.id,
+          }))
+        );
+
+      const selectRow = new ActionRow<typeof selectMenu>().addComponents(selectMenu);
+
+      await interaction.followUp({
+        content: strings.teamSelectTarget,
+        components: [selectRow],
+        ephemeral: true,
+      });
+      break;
+    }
+
+    case 'team_accept': {
+      const result = lobby.acceptTeamInvite(interaction.user.id);
+      await lobby.updateLobbyMessage();
       await session.saveActiveState();
+
+      await interaction.followUp({
+        content: strings.teamInviteAccepted(result.partnerName),
+        ephemeral: true,
+      });
+
+      // Notify the inviter
+      try {
+        const inviter = session.getState().players.get(result.partnerId);
+        if (inviter) {
+          const inviterStrings = getLocale(inviter.language);
+          const user = await interaction.client.users.fetch(result.partnerId);
+          const dm = await user.createDM();
+          await dm.send({ content: inviterStrings.teamInviteAccepted(interaction.user.displayName) });
+        }
+      } catch {
+        // DM to inviter may fail — not critical
+      }
+      break;
+    }
+
+    case 'team_decline': {
+      const result = lobby.declineTeamInvite(interaction.user.id);
+      await session.saveActiveState();
+
+      await interaction.followUp({
+        content: strings.teamInviteDeclined(interaction.user.displayName),
+        ephemeral: true,
+      });
+
+      // Notify the inviter
+      try {
+        const inviter = session.getState().players.get(result.inviterId);
+        if (inviter) {
+          const inviterStrings = getLocale(inviter.language);
+          const user = await interaction.client.users.fetch(result.inviterId);
+          const dm = await user.createDM();
+          await dm.send({ content: inviterStrings.teamInviteDeclined(interaction.user.displayName) });
+        }
+      } catch {
+        // DM to inviter may fail — not critical
+      }
       break;
     }
 

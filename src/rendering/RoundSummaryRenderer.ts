@@ -147,13 +147,24 @@ export function renderGameOver(state: GameState) {
   const winner = state.winnerId ? state.players.get(state.winnerId) : null;
   const allPlayers = Array.from(state.players.values());
 
+  // Determine if this is a team victory
+  const isTeamWin = state.winnerTeamId !== null && !state.winnerId;
+  const teamWinners = isTeamWin
+    ? allPlayers.filter(p => p.teamId === state.winnerTeamId && p.alive)
+    : [];
+
   // ── Title ───────────────────────────────────────────
   const title = new TextDisplayBuilder()
     .setContent(`🏆 **${strings.gameOverTitle}**`);
 
   // ── Winner / Draw description ───────────────────────
   let description: string;
-  if (winner) {
+  if (isTeamWin && teamWinners.length > 0) {
+    const names = teamWinners.map(p => p.username).join(' & ');
+    description =
+      strings.gameOverTeamWinner(names) + '\n\n' +
+      strings.gameOverTeamWinnerStats(teamWinners.length, state.round);
+  } else if (winner) {
     description =
       strings.gameOverWinner(winner.username) + '\n\n' +
       strings.gameOverWinnerStats(winner.roundsSurvived, winner.damageDealt, winner.kills);
@@ -223,4 +234,3 @@ export function renderGameOver(state: GameState) {
     flags: [MessageFlags.IsComponentsV2] as const,
   };
 }
-

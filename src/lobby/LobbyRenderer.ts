@@ -117,7 +117,7 @@ export function renderLobbyStarted(state: GameState) {
   const totalPlayers = state.players.size;
 
   const strings = getLocale(state.language);
-  const currentRound = state.phase === 'active' ? state.round + 1 : state.round;
+  const currentRound = state.round;
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(strings.lobbyInProgress)

@@ -45,6 +45,8 @@ export interface GameState {
   endedAt: number | null;
   /** Player ID of the winner (null if game is still active) */
   winnerId: string | null;
+  /** Team ID of the winning team (null if solo winner or game is still active) */
+  winnerTeamId: string | null;
 
   /** Optional Discord role ID required to join this game (null = anyone can join) */
   requiredRoleId: string | null;
@@ -85,6 +87,7 @@ export function createGameState(
     startedAt: null,
     endedAt: null,
     winnerId: null,
+    winnerTeamId: null,
     requiredRoleId,
     creatorId,
     lobbyMessageId: null,

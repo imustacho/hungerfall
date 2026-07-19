@@ -184,15 +184,32 @@ export class GameEngine {
       }
     }
 
-    // ── 8. Check game end ─────────────────────────────
+    // ── 8. Check game end ─────────────────────────────────
     const alive = getAlivePlayers(state);
     result.aliveCount = alive.length;
 
     if (alive.length <= 1) {
+      // Standard end: 0 or 1 player alive
       state.phase = 'finished';
       state.endedAt = Date.now();
       state.winnerId = alive.length === 1 ? alive[0].id : null;
+      state.winnerTeamId = alive.length === 1 ? alive[0].teamId : null;
       log.info(`Game over! Winner: ${alive.length === 1 ? alive[0].username : 'None (draw)'}`);
+    } else if (alive.length >= 2) {
+      // Team win: all alive players belong to the same team
+      const aliveWithTeam = alive.filter(p => p.teamId !== null);
+      if (aliveWithTeam.length === alive.length) {
+        const teamId = aliveWithTeam[0].teamId;
+        const allSameTeam = aliveWithTeam.every(p => p.teamId === teamId);
+        if (allSameTeam && teamId !== null) {
+          state.phase = 'finished';
+          state.endedAt = Date.now();
+          state.winnerId = null; // No single winner — it's a team win
+          state.winnerTeamId = teamId;
+          const teamNames = alive.map(p => p.username).join(' & ');
+          log.info(`Game over! Winning team ${teamId}: ${teamNames}`);
+        }
+      }
     }
 
     // Store round result in history

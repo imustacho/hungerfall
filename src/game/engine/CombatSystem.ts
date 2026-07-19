@@ -101,6 +101,9 @@ export class CombatSystem {
     damage -= this.getDefenseBonus(target);
     damage = Math.max(1, damage); // Minimum 1 damage
 
+    // Apply hard damage cap
+    damage = Math.min(damage, GAME_CONSTANTS.MAX_DAMAGE_CAP);
+
     events.push({
       type: 'damage',
       attackerId: attacker.id,

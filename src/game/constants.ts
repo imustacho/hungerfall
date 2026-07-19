@@ -33,6 +33,8 @@ export const GAME_CONSTANTS = {
   DEFEND_REDUCTION: 0.35,
   /** Betray damage multiplier (surprise attack bonus) */
   BETRAY_MULTIPLIER: 1.8,
+  /** Maximum damage that can be dealt in a single attack (hard cap) */
+  MAX_DAMAGE_CAP: 60,
   /** Help teammate strength boost intensity */
   HELP_BOOST_INTENSITY: 20,
   /** Help teammate strength boost duration in rounds */

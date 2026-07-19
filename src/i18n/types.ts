@@ -164,4 +164,26 @@ export interface LocaleStrings {
   kills: string;
   dmg: string;
   rounds: string;
+
+  // ── Team invite system ──────────────────────────────
+  teamInviteSent: (targetName: string) => string;
+  teamInviteReceived: (fromName: string) => string;
+  teamInviteAccepted: (partnerName: string) => string;
+  teamInviteDeclined: (targetName: string) => string;
+  teamInviteExpired: string;
+  teamSelectTarget: string;
+  teamSelectPlaceholder: string;
+  teamBtnAccept: string;
+  teamBtnDecline: string;
+  errTeamInviteSelf: string;
+  errTeamTargetInTeam: string;
+  errTeamNoInvite: string;
+
+  // ── DM failure notification ─────────────────────────
+  dmFailedNotice: (playerMentions: string) => string;
+
+  // ── Team victory ────────────────────────────────────
+  gameOverTeamWinner: (names: string) => string;
+  gameOverTeamWinnerStats: (playerCount: number, rounds: number) => string;
+  threadTeamWinnerAnnounce: (mentions: string) => string;
 }

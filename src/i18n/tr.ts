@@ -135,4 +135,26 @@ export const trStrings: LocaleStrings = {
   kills: 'leş',
   dmg: 'hasar',
   rounds: 'tur',
+
+  // ── Team invite system ──────────────────────────────
+  teamInviteSent: (targetName) => `🤝 **${targetName}** adlı oyuncuya takım daveti gönderildi! Yanıtı bekleniyor...`,
+  teamInviteReceived: (fromName) => `🤝 **${fromName}** seninle takım olmak istiyor!`,
+  teamInviteAccepted: (partnerName) => `🤝 **${partnerName}** ile takım oldunuz!`,
+  teamInviteDeclined: (targetName) => `❌ **${targetName}** takım davetini reddetti.`,
+  teamInviteExpired: '⏰ Takım daveti süresi doldu.',
+  teamSelectTarget: '🤝 Takımına davet etmek istediğin oyuncuyu seç:',
+  teamSelectPlaceholder: 'Bir oyuncu seç...',
+  teamBtnAccept: 'Kabul Et',
+  teamBtnDecline: 'Reddet',
+  errTeamInviteSelf: 'Kendini davet edemezsin!',
+  errTeamTargetInTeam: 'Bu oyuncu zaten bir takımda!',
+  errTeamNoInvite: 'Bekleyen bir takım daveti bulunamadı.',
+
+  // ── DM failure notification ─────────────────────────
+  dmFailedNotice: (playerMentions) => `⚠️ Şu oyunculara DM gönderilemedi: ${playerMentions}. Bu turda savunma yapacaklar. Lütfen sunucu üyelerinden gelen DM'leri aktif edin!`,
+
+  // ── Team victory ────────────────────────────────────
+  gameOverTeamWinner: (names) => `# 👑 Takım Zaferi! ${names} ayakta kalan son takım!`,
+  gameOverTeamWinnerStats: (playerCount, rounds) => `**${playerCount}** takım arkadaşı birlikte **${rounds}** tur hayatta kaldı.`,
+  threadTeamWinnerAnnounce: (mentions) => `🏆 ${mentions} takım olarak oyunu kazandı!`,
 };
