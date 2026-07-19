@@ -158,25 +158,27 @@ async function handleTeamInviteSelect(
       ephemeral: true,
     });
 
-    // Send accept/decline buttons to the target in the channel
+    // Send accept/decline buttons to the target via DM
     const target = session.getState().players.get(targetId);
     if (target) {
       const targetStrings = getLocale(target.language);
       const acceptRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId('lobby_team_accept')
+          .setCustomId(`lobby_team_accept_${session.getState().channelId}`)
           .setLabel(targetStrings.teamBtnAccept)
           .setEmoji('✅')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-          .setCustomId('lobby_team_decline')
+          .setCustomId(`lobby_team_decline_${session.getState().channelId}`)
           .setLabel(targetStrings.teamBtnDecline)
           .setEmoji('❌')
           .setStyle(ButtonStyle.Danger),
       );
 
-      await interaction.followUp({
-        content: `<@${targetId}> ${targetStrings.teamInviteReceived(interaction.user.displayName)}`,
+      const targetUser = await interaction.client.users.fetch(targetId);
+      const dmChannel = await targetUser.createDM();
+      await dmChannel.send({
+        content: targetStrings.teamInviteReceived(interaction.user.displayName),
         components: [acceptRow],
       });
     }

@@ -141,6 +141,7 @@ export const trStrings: LocaleStrings = {
   teamInviteReceived: (fromName) => `🤝 **${fromName}** seninle takım olmak istiyor!`,
   teamInviteAccepted: (partnerName) => `🤝 **${partnerName}** ile takım oldunuz!`,
   teamInviteDeclined: (targetName) => `❌ **${targetName}** takım davetini reddetti.`,
+  teamInviteDeclinedRecipient: (inviterName) => `❌ **${inviterName}** tarafından gönderilen takım davetini reddettiniz.`,
   teamInviteExpired: '⏰ Takım daveti süresi doldu.',
   teamSelectTarget: '🤝 Takımına davet etmek istediğin oyuncuyu seç:',
   teamSelectPlaceholder: 'Bir oyuncu seç...',

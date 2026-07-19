@@ -170,6 +170,7 @@ export interface LocaleStrings {
   teamInviteReceived: (fromName: string) => string;
   teamInviteAccepted: (partnerName: string) => string;
   teamInviteDeclined: (targetName: string) => string;
+  teamInviteDeclinedRecipient: (inviterName: string) => string;
   teamInviteExpired: string;
   teamSelectTarget: string;
   teamSelectPlaceholder: string;

@@ -141,6 +141,7 @@ export const deStrings: LocaleStrings = {
   teamInviteReceived: (fromName) => `🤝 **${fromName}** möchte ein Team mit dir bilden!`,
   teamInviteAccepted: (partnerName) => `🤝 Du bist nun im Team mit **${partnerName}**!`,
   teamInviteDeclined: (targetName) => `❌ **${targetName}** hat deine Team-Einladung abgelehnt.`,
+  teamInviteDeclinedRecipient: (inviterName) => `❌ Du hast die Team-Einladung von **${inviterName}** abgelehnt.`,
   teamInviteExpired: '⏰ Team-Einladung abgelaufen.',
   teamSelectTarget: '🤝 Wähle einen Spieler, den du in dein Team einladen möchtest:',
   teamSelectPlaceholder: 'Spieler auswählen...',

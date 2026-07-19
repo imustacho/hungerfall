@@ -32,7 +32,14 @@ export async function handleButtonInteraction(interaction: ButtonInteraction): P
         return;
       }
 
-      session = sessionManager.getSession(interaction.channelId);
+      if (customId.startsWith('lobby_team_accept_') || customId.startsWith('lobby_team_decline_')) {
+        const parts = customId.split('_');
+        const targetChannelId = parts.slice(3).join('_');
+        session = sessionManager.getSession(targetChannelId);
+      } else {
+        session = sessionManager.getSession(interaction.channelId);
+      }
+
       if (!session) {
         const strings = getLocale();
         await interaction.reply({
@@ -117,8 +124,14 @@ async function handleLobbyButton(interaction: ButtonInteraction, session: GameSe
   const strings = getLocale(session.getState().language);
   const lobby = session.getLobbyManager();
   const action = interaction.customId.replace('lobby_', '');
+  let actionName = action;
+  if (action.startsWith('team_accept_')) {
+    actionName = 'team_accept';
+  } else if (action.startsWith('team_decline_')) {
+    actionName = 'team_decline';
+  }
 
-  switch (action) {
+  switch (actionName) {
     case 'join': {
       // Role gate check
       const requiredRoleId = session.getState().requiredRoleId;
@@ -238,9 +251,9 @@ async function handleLobbyButton(interaction: ButtonInteraction, session: GameSe
       await lobby.updateLobbyMessage();
       await session.saveActiveState();
 
-      await interaction.followUp({
+      await interaction.editReply({
         content: strings.teamInviteAccepted(result.partnerName),
-        ephemeral: true,
+        components: [],
       });
 
       // Notify the inviter
@@ -262,16 +275,19 @@ async function handleLobbyButton(interaction: ButtonInteraction, session: GameSe
       const result = lobby.declineTeamInvite(interaction.user.id);
       await session.saveActiveState();
 
-      await interaction.followUp({
-        content: strings.teamInviteDeclined(interaction.user.displayName),
-        ephemeral: true,
+      const inviter = session.getState().players.get(result.inviterId);
+      const inviterName = inviter ? inviter.username : 'Unknown';
+
+      await interaction.editReply({
+        content: strings.teamInviteDeclinedRecipient(inviterName),
+        components: [],
       });
 
       // Notify the inviter
       try {
-        const inviter = session.getState().players.get(result.inviterId);
-        if (inviter) {
-          const inviterStrings = getLocale(inviter.language);
+        const inviterPlayer = session.getState().players.get(result.inviterId);
+        if (inviterPlayer) {
+          const inviterStrings = getLocale(inviterPlayer.language);
           const user = await interaction.client.users.fetch(result.inviterId);
           const dm = await user.createDM();
           await dm.send({ content: inviterStrings.teamInviteDeclined(interaction.user.displayName) });
