@@ -1,4 +1,4 @@
-# ⚔️ Hungerfall
+# Hungerfall
 
 A turn-based survival Discord bot with AI-powered narration. 
 
@@ -6,18 +6,7 @@ Hungerfall is **not** a passive simulator. Players actively receive turn choices
 
 ---
 
-## 🚀 Key Features
-
-* **Interactive DM Controls:** Players make turn choices via modern Discord buttons in their DMs.
-* **Direct Item Actions:** Manually use consumables, weapons, armor, and special cloaks directly from inventory buttons without wasting your round action.
-* **Smart AI Narration:** Utilizes any OpenAI-compatible API (e.g. OpenAI, Cerebras, Together AI, Ollama) to write concise, realistic summaries of the events. Falls back to templates if offline.
-* **Persistence & Recovery:** Active games, player states, and lobbies are saved to `data/matches.json` in real-time. If the bot restarts, it recovers all active games instantly.
-* **Role Gating:** Lobby hosts can restrict join permissions to players with specific Discord server roles.
-* **High Pacing:** Fast combat rules, poison, bleed mechanics, and low evasion ensure matches resolve quickly.
-
----
-
-## ⚙️ Configuration (.env)
+## Configuration (.env)
 
 Create a `.env` file in the root directory:
 
@@ -40,7 +29,7 @@ LOG_LEVEL=info
 
 ---
 
-## 🎮 How to Play
+##  How to Play
 
 1. Run the `/game` slash command in a channel.
    * *Optional options:* `language` (en, tr, de) and `required_role` (to restrict entries).
@@ -50,7 +39,7 @@ LOG_LEVEL=info
 
 ---
 
-## 🛠️ Development
+## Development
 
 ### 1. Installation
 ```bash
